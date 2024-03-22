@@ -45,7 +45,9 @@
       ;; reflection, but, graalvm is able to automatically detect because args are static
       (let [m (.getMethod java.util.concurrent.Executors "newVirtualThreadPerTaskExecutor" nil)]
         (fn []
-          (.invoke m nil nil)))
+          ;; method is cached above, so most of the cost of reflection is avoided
+          ;; jvm should be able to optimize because this call is static
+          (.invoke ^java.lang.reflect.Method m nil nil)))
       (catch Throwable _
         nil))))
 
