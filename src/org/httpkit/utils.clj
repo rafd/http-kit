@@ -39,9 +39,14 @@
     `(do ~then)
     `(do ~else)))
 
-(defn have-virtual-threads?
-  "Returns true iff the current JVM supports virtual threads."
-  [] (compile-if (Thread/ofVirtual) true false))
+(let [have-virtual-threads?_ (delay (try
+                                      (println "READING HAVE VIRTUAL")
+                                      (Thread/ofVirtual)
+                                      (catch Throwable _
+                                        false)))]
+  (defn have-virtual-threads?
+    "Returns true iff the current JVM supports virtual threads."
+    [] @have-virtual-threads?_))
 
 (defn new-worker
   "Returns {:keys [n-cores type pool ...]} where `:pool` is a
@@ -64,10 +69,9 @@
 
   (let [;; Calculate at runtime to prevent Graal issues
         n-cores (.availableProcessors (Runtime/getRuntime))
-        new-virtual-pool
-        (compile-if (Thread/ofVirtual)
-          (fn [] (java.util.concurrent.Executors/newVirtualThreadPerTaskExecutor))
-          nil)]
+        new-virtual-pool (if (have-virtual-threads?)
+                           (fn [] (java.util.concurrent.Executors/newVirtualThreadPerTaskExecutor))
+                           nil)]
 
     (if (and allow-virtual? new-virtual-pool)
 
