@@ -39,14 +39,19 @@
     `(do ~then)
     `(do ~else)))
 
-(let [have-virtual-threads?_ (delay (try
-                                      (println "READING HAVE VIRTUAL")
-                                      (Thread/ofVirtual)
-                                      (catch Throwable _
-                                        false)))]
-  (defn have-virtual-threads?
-    "Returns true iff the current JVM supports virtual threads."
-    [] @have-virtual-threads?_))
+(def new-virtual-thread-pool-fn
+  (delay
+    (try
+      ;; reflection, but, graalvm is able to automatically detect because args are static
+      (let [m (.getMethod java.util.concurrent.Executors "newVirtualThreadPerTaskExecutor" nil)]
+        (fn []
+          (.invoke m nil nil)))
+      (catch Throwable _
+        nil))))
+
+(defn have-virtual-threads?
+  "Returns true iff the current JVM supports virtual threads."
+  [] (boolean @new-virtual-thread-pool-fn))
 
 (defn new-worker
   "Returns {:keys [n-cores type pool ...]} where `:pool` is a
@@ -69,9 +74,7 @@
 
   (let [;; Calculate at runtime to prevent Graal issues
         n-cores (.availableProcessors (Runtime/getRuntime))
-        new-virtual-pool (if (have-virtual-threads?)
-                           (fn [] (java.util.concurrent.Executors/newVirtualThreadPerTaskExecutor))
-                           nil)]
+        new-virtual-pool @new-virtual-thread-pool-fn]
 
     (if (and allow-virtual? new-virtual-pool)
 
